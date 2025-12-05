@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Layout from './components/Layout';
 import StudentView from './components/StudentView';
-import { User, Student, Material, Submission, Role, AppSettings, FileAttachment } from './types';
+import { User, Student, Material, Submission, Role, AppSettings, FileAttachment, Question } from './types';
 import * as db from './services/storage';
 import { GRADES } from './constants';
 import { 
@@ -112,7 +112,7 @@ function App() {
             materials={materials}
             settings={settings}
             submissions={submissions}
-            onSubmit={(sub) => { db.saveSubmission(sub); }}
+            onSubmit={(sub: Submission) => { db.saveSubmission(sub); }}
         />
       )}
 
@@ -122,7 +122,7 @@ function App() {
             materials={materials}
             role={role}
             assignedClass={teacherClass}
-            onUpdate={(sub) => { db.saveSubmission(sub); }}
+            onUpdate={(sub: Submission) => { db.saveSubmission(sub); }}
         />
       )}
 
@@ -133,7 +133,7 @@ function App() {
       {view === 'settings' && role === 'admin' && (
         <SettingsManager 
             settings={settings} 
-            onSave={(s) => { db.saveSettings(s); }} 
+            onSave={(s: AppSettings) => { db.saveSettings(s); }} 
         />
       )}
     </Layout>
@@ -142,7 +142,7 @@ function App() {
 
 // --- Sub Components ---
 
-const LoginScreen = ({ onLogin, users, students }: { onLogin: any, users: User[], students: Student[] }) => {
+const LoginScreen = ({ onLogin, users, students }: { onLogin: (u: User | Student) => void, users: User[], students: Student[] }) => {
     const [tab, setTab] = useState<'staff' | 'student'>('student');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -505,7 +505,7 @@ const MaterialManager = ({ materials, role, assignedClass }: any) => {
                             <button onClick={addQuestion} className="text-sm bg-brand-100 text-brand-700 px-3 py-1 rounded hover:bg-brand-200">+ Tambah Tanya</button>
                         </div>
                         <div className="space-y-3">
-                            {formData.questions?.map((q, idx) => (
+                            {formData.questions?.map((q: Question, idx: number) => (
                                 <div key={q.id} className="flex gap-2">
                                     <span className="mt-2 text-xs font-bold text-gray-400">{idx+1}.</span>
                                     <input className="input flex-1" value={q.text} onChange={e => updateQuestion(idx, e.target.value)} placeholder="Tulis pertanyaan..." />

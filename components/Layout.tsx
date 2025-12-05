@@ -32,6 +32,14 @@ const Layout: React.FC<LayoutProps> = ({ user, role, children, onLogout, current
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
+  // Helper to safely get name
+  const getUserName = () => {
+    if ('name' in user) {
+        return (user as Student).name;
+    }
+    return (user as User).fullName;
+  };
+
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Sidebar Mobile Overlay */}
@@ -111,13 +119,13 @@ const Layout: React.FC<LayoutProps> = ({ user, role, children, onLogout, current
 
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="text-sm font-bold text-gray-900">{user.name || (user as User).fullName}</p>
+              <p className="text-sm font-bold text-gray-900">{getUserName()}</p>
               <p className="text-xs text-gray-500 capitalize">
                 {role === 'teacher' ? `Wali Kelas ${(user as User).assignedClass || '?'}` : role === 'student' ? 'Siswa' : 'Administrator'}
               </p>
             </div>
             <div className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-brand-500 font-bold">
-               {(user.name || (user as User).fullName).charAt(0).toUpperCase()}
+               {getUserName().charAt(0).toUpperCase()}
             </div>
           </div>
         </header>
