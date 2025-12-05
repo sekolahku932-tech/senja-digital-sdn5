@@ -3,9 +3,9 @@ import Layout from './components/Layout';
 import StudentView from './components/StudentView';
 import { User, Student, Material, Submission, AppSettings, Question, FileAttachment } from './types';
 import * as db from './services/storage';
-import { GRADES } from './constants';
+import { GRADES, INITIAL_ADMIN } from './constants';
 import { 
-  Users, Trash2, Edit, Plus, Upload, Check, X, FileText, Search, Download, Paperclip, Link, Image as ImageIcon, Video 
+  Users, Trash2, Edit, Plus, Upload, Check, X, FileText, Search, Download, Paperclip, Link, Image as ImageIcon, Video, Loader2, Info, WifiOff
 } from 'lucide-react';
 
 function App() {
@@ -145,20 +145,58 @@ const LoginScreen = ({ onLogin, users, students }: { onLogin: (u: User | Student
     const [password, setPassword] = useState('');
     const [nisn, setNisn] = useState('');
     const [error, setError] = useState('');
+    const [isSlowConnection, setIsSlowConnection] = useState(false);
+
+    // Check if data is ready.
+    const isDataReady = users.length > 0;
+
+    // Detect slow connection
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (!isDataReady) setIsSlowConnection(true);
+        }, 5000);
+        return () => clearTimeout(timer);
+    }, [isDataReady]);
 
     const handleStaffLogin = (e: React.FormEvent) => {
         e.preventDefault();
-        // Simple check against loaded users
+        
+        // 1. Cek di data yang sudah terload
         const user = users.find(u => u.username === username && u.password === password);
-        if (user) onLogin(user);
-        else setError("Username atau Password salah (Pastikan Database tersambung)");
+        
+        if (user) {
+            setError('');
+            onLogin(user);
+            return;
+        }
+
+        // 2. BACKUP PLAN: Jika database lambat (kosong), tapi user input admin/admin, PAKSA MASUK (Optimistic Login)
+        if (!isDataReady && username === 'admin' && password === 'admin') {
+             // Buat user admin sementara
+             onLogin({ ...INITIAL_ADMIN, id: 'temp-admin' });
+             return;
+        }
+
+        // 3. Jika gagal
+        if (!isDataReady) {
+            setError("Database belum siap. Tunggu sebentar atau pastikan koneksi internet lancar.");
+        } else {
+            setError("Username atau Password salah.");
+        }
     };
 
     const handleStudentLogin = (e: React.FormEvent) => {
         e.preventDefault();
         const student = students.find(s => s.nisn === nisn);
-        if (student) onLogin(student);
-        else setError("NISN tidak ditemukan. Hubungi Guru.");
+        if (student) {
+            onLogin(student);
+        } else {
+             if (students.length === 0 && !isDataReady) {
+                 setError("Sedang memuat data siswa... Mohon tunggu.");
+            } else {
+                 setError("NISN tidak ditemukan. Hubungi Guru Wali Kelas.");
+            }
+        }
     };
 
     return (
@@ -173,7 +211,7 @@ const LoginScreen = ({ onLogin, users, students }: { onLogin: (u: User | Student
                     <button onClick={() => {setTab('staff'); setError('');}} className={`flex-1 py-4 font-bold ${tab === 'staff' ? 'text-brand-600 border-b-2 border-brand-600' : 'text-gray-400'}`}>GURU / ADMIN</button>
                 </div>
                 <div className="p-8">
-                    {error && <div className="bg-red-100 text-red-600 p-3 rounded mb-4 text-sm text-center">{error}</div>}
+                    {error && <div className="bg-red-100 text-red-600 p-3 rounded mb-4 text-sm text-center animate-pulse">{error}</div>}
                     
                     {tab === 'staff' ? (
                         <form onSubmit={handleStaffLogin} className="space-y-4">
@@ -185,7 +223,29 @@ const LoginScreen = ({ onLogin, users, students }: { onLogin: (u: User | Student
                                 <label className="block text-sm font-medium text-gray-700">Password</label>
                                 <input type="password" className="mt-1 w-full border rounded-lg p-3" value={password} onChange={e => setPassword(e.target.value)} required />
                             </div>
-                            <button type="submit" className="w-full bg-brand-600 text-white py-3 rounded-lg font-bold hover:bg-brand-700 transition">MASUK</button>
+                            
+                            <button 
+                                type="submit" 
+                                className={`w-full py-3 rounded-lg font-bold transition flex items-center justify-center gap-2 bg-brand-600 text-white hover:bg-brand-700`}
+                            >
+                                {!isDataReady && <Loader2 className="w-5 h-5 animate-spin" />}
+                                MASUK {!isDataReady && '(Memuat...)'}
+                            </button>
+
+                            <div className="text-center mt-4">
+                                <p className={`text-xs ${isDataReady ? 'text-green-600' : 'text-orange-500'} flex items-center justify-center gap-1`}>
+                                    Status Database: {isDataReady ? 'Terhubung ✅' : 'Menghubungkan...'}
+                                </p>
+                                {isSlowConnection && !isDataReady && (
+                                    <p className="text-xs text-red-500 mt-1 flex items-center justify-center gap-1">
+                                        <WifiOff className="w-3 h-3"/> Koneksi lambat, tapi Admin tetap bisa masuk.
+                                    </p>
+                                )}
+                                <div className="mt-2 bg-blue-50 text-blue-700 p-2 rounded text-xs inline-block">
+                                    <p className="font-bold">Info Login Default:</p>
+                                    <p>User: admin | Pass: admin</p>
+                                </div>
+                            </div>
                         </form>
                     ) : (
                         <form onSubmit={handleStudentLogin} className="space-y-4">
@@ -199,7 +259,15 @@ const LoginScreen = ({ onLogin, users, students }: { onLogin: (u: User | Student
                                 <label className="block text-sm font-medium text-gray-700">NISN</label>
                                 <input type="text" className="mt-1 w-full border rounded-lg p-3 text-center text-lg tracking-widest" placeholder="Contoh: 1234567890" value={nisn} onChange={e => setNisn(e.target.value)} required />
                             </div>
-                            <button type="submit" className="w-full bg-orange-500 text-white py-3 rounded-lg font-bold hover:bg-orange-600 transition">MASUK KELAS</button>
+                            <button 
+                                type="submit" 
+                                className={`w-full py-3 rounded-lg font-bold transition flex items-center justify-center gap-2 bg-orange-500 text-white hover:bg-orange-600`}
+                            >
+                                MASUK KELAS
+                            </button>
+                             {!isDataReady && (
+                                <p className="text-xs text-center text-gray-400 mt-2">Menunggu data siswa...</p>
+                            )}
                         </form>
                     )}
                 </div>
