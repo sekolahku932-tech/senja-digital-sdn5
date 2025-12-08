@@ -1,20 +1,25 @@
-export type Role = 'admin' | 'teacher' | 'student';
+export enum Role {
+  ADMIN = 'ADMIN',
+  TEACHER = 'TEACHER', // Wali Kelas
+  STUDENT = 'STUDENT'
+}
 
 export interface User {
   id: string;
-  username: string;
-  password?: string;
-  fullName: string;
+  username: string; // NISN for students, username for others
+  name: string;
   role: Role;
-  assignedClass?: string; // For teachers (e.g., "1", "6")
+  classGrade?: string; // For Teachers (assigned class) or Students (current class)
+  password?: string; // Only for Admin/Teacher
 }
 
 export interface Student {
-  id: string;
   nisn: string;
   name: string;
   gender: 'L' | 'P';
-  grade: string; // Kelas 1-6
+  classGrade: string;
+  parentName?: string;
+  parentPhone?: string;
 }
 
 export interface Question {
@@ -22,43 +27,39 @@ export interface Question {
   text: string;
 }
 
+export interface Task {
+  id: string;
+  description: string;
+}
+
 export interface Material {
   id: string;
-  grade: string;
   title: string;
-  type: 'pdf' | 'video' | 'article' | 'image';
-  url: string; // Link to PDF or Video OR Base64 Data
-  questions: Question[]; // Reflection questions
-  taskDescription: string;
-}
-
-export interface FileAttachment {
-  name: string;
-  type: string;
-  data: string; // Base64 string
-}
-
-export interface SubmissionAnswer {
-  questionId: string;
-  answer: string;
-  attachment?: FileAttachment;
+  classGrade: string; // 1-6
+  content: string; // Text content
+  mediaType: 'image' | 'video' | 'pdf' | 'none';
+  mediaUrl: string; // URL or Base64
+  questions: Question[];
+  tasks: Task[];
+  createdAt: string;
 }
 
 export interface Submission {
   id: string;
-  studentId: string;
-  studentName: string;
   materialId: string;
-  materialTitle: string;
-  answers: SubmissionAnswer[];
-  taskResponse: string; // Text description
-  taskAttachments?: FileAttachment[]; // Array of files for the task
-  feedback?: string;
-  status: 'pending' | 'approved' | 'rejected';
+  studentNisn: string;
+  studentName: string;
+  classGrade: string;
+  answers: { questionId: string; answer: string }[];
+  taskText?: string; // Jawaban tugas berupa teks
+  taskFileUrl?: string; // Uploaded task evidence
+  teacherNotes?: string;
+  isApproved: boolean; // For certificate
+  // Added approvalStatus to match usage in storageService
+  approvalStatus?: string;
   submittedAt: string;
-  grade?: string; // Class
 }
 
-export interface AppSettings {
-  certBackground: string; // Base64 image
+export interface AppState {
+  currentUser: User | null;
 }
