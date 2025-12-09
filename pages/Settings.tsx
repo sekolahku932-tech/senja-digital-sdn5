@@ -18,7 +18,8 @@ export const Settings: React.FC = () => {
       setBgUrl(saved);
       setPreview(saved);
     } else {
-      setPreview('https://via.placeholder.com/800x600/e0e7ff/4f46e5?text=Sertifikat+Template');
+      // Don't set external URL to avoid network errors
+      setPreview('');
     }
 
     // DB URL
@@ -81,9 +82,8 @@ export const Settings: React.FC = () => {
   };
 
   const handleResetCert = () => {
-    const defaultUrl = 'https://via.placeholder.com/800x600/e0e7ff/4f46e5?text=Sertifikat+Template';
     setBgUrl('');
-    setPreview(defaultUrl);
+    setPreview('');
     storageService.setCertBg('');
     showNotify('Pengaturan di-reset ke default.');
   };
@@ -427,8 +427,9 @@ function doPost(e) {
                     </div>
                   </>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-slate-400 text-sm">
-                    No Image Selected
+                  <div className="flex items-center justify-center h-full flex-col bg-slate-50">
+                     <p className="text-slate-400 text-sm font-medium mb-2">Tidak ada gambar background.</p>
+                     <p className="text-xs text-slate-400 text-center px-6">Sertifikat akan menggunakan desain gradasi warna standar.</p>
                   </div>
                 )}
              </div>
