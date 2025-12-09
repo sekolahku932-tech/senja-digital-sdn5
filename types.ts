@@ -1,3 +1,4 @@
+
 export enum Role {
   ADMIN = 'ADMIN',
   TEACHER = 'TEACHER', // Wali Kelas
@@ -6,58 +7,57 @@ export enum Role {
 
 export interface User {
   id: string;
-  username: string; // NISN for students, username for others
+  username: string;
+  password?: string; // Optional for student view
   name: string;
   role: Role;
-  classGrade?: string; // For Teachers (assigned class) or Students (current class)
-  password?: string; // Only for Admin/Teacher
+  classAssigned?: string; // For teachers (e.g., "1", "6")
 }
 
 export interface Student {
   nisn: string;
   name: string;
   gender: 'L' | 'P';
-  classGrade: string;
-  parentName?: string;
-  parentPhone?: string;
+  classGrade: string; // 1-6
+  parentId?: string;
 }
 
 export interface Question {
   id: string;
   text: string;
-}
-
-export interface Task {
-  id: string;
-  description: string;
+  type: 'text';
 }
 
 export interface Material {
   id: string;
   title: string;
   classGrade: string; // 1-6
-  content: string; // Text content
-  mediaType: 'image' | 'video' | 'pdf' | 'none';
-  mediaUrl: string; // URL or Base64
-  questions: Question[];
-  tasks: Task[];
-  createdAt: string;
+  type: 'PDF' | 'VIDEO' | 'ARTICLE';
+  contentUrl: string; // Link or base64 placeholder
+  coverImage?: string;
+  description?: string;
+  taskInstruction?: string; // New: Specific instruction for the upload task
+  reflectionQuestions: Question[];
 }
 
 export interface Submission {
   id: string;
-  materialId: string;
   studentNisn: string;
   studentName: string;
-  classGrade: string;
-  answers: { questionId: string; answer: string }[];
-  taskText?: string; // Jawaban tugas berupa teks
-  taskFileUrl?: string; // Uploaded task evidence
-  teacherNotes?: string;
-  isApproved: boolean; // For certificate
-  // Added approvalStatus to match usage in storageService
-  approvalStatus?: string;
+  materialId: string;
+  materialTitle: string;
+  answers: Record<string, string>; // questionId -> answer
+  taskFile?: string; // URL/Base64
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  teacherFeedback?: string;
   submittedAt: string;
+}
+
+export interface Parent {
+  id: string;
+  studentNisn: string;
+  name: string;
+  phone: string;
 }
 
 export interface AppState {

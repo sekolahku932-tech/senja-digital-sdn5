@@ -1,261 +1,267 @@
+
 import { User, Role, Student, Material, Submission } from '../types';
 
-// ================= CONFIGURATION =================
+// Initial Data
+const INITIAL_USERS: User[] = [
+  // Added classAssigned: '' to ensure the column is created in Spreadsheet even for Admin
+  { id: 'u1', username: 'admin', password: 'admin', name: 'Administrator', role: Role.ADMIN, classAssigned: '' },
+  { id: 'u2', username: 'guru1', password: '123', name: 'Ibu Ratna', role: Role.TEACHER, classAssigned: '1' },
+];
+
+const INITIAL_STUDENTS: Student[] = [
+  { nisn: '12345', name: 'Budi Santoso', gender: 'L', classGrade: '1' },
+  { nisn: '67890', name: 'Siti Aminah', gender: 'P', classGrade: '1' },
+];
+
+const INITIAL_MATERIALS: Material[] = [
+  {
+    id: 'm1',
+    title: 'Kancil dan Buaya',
+    classGrade: '1',
+    type: 'ARTICLE',
+    contentUrl: 'https://example.com',
+    coverImage: 'https://picsum.photos/400/300',
+    description: 'Cerita fabel tentang kecerdikan kancil.',
+    taskInstruction: 'Gambarlah tokoh Kancil di buku gambarmu, lalu foto dan upload di sini.',
+    reflectionQuestions: [
+      { id: 'q1', text: 'Siapa tokoh utama dalam cerita?', type: 'text' },
+      { id: 'q2', text: 'Apa pesan moral dari cerita tersebut?', type: 'text' }
+    ]
+  }
+];
+
 const KEYS = {
-  USERS: 'senja_users_reset',
-  STUDENTS: 'senja_students_reset',
-  MATERIALS: 'senja_materials_reset',
-  SETTINGS: 'senja_settings_reset',
+  USERS: 'senja_users',
+  STUDENTS: 'senja_students',
+  MATERIALS: 'senja_materials',
+  SUBMISSIONS: 'senja_submissions',
+  SETTINGS: 'senja_settings',
+  DB_URL: 'senja_db_url'
 };
 
-// CACHE KEY FINAL RESET - MEMAKSA BROWSER LUPA SEMUA DATA LAMA
-const SUBMISSION_CACHE_KEY = 'senja_submissions_FINAL_RESET';
+// --- DEFAULT SYSTEM CONFIGURATION ---
+const SYSTEM_DB_URL = "https://script.google.com/macros/s/AKfycbwBck0oTRjTrPnh4eWsmH-JkyGxvMOA69tg8HNPl0iw97VcPTxR2U12NzripdZBbrK-/exec";
 
-// URL API Google Apps Script
-const API_URL = "https://script.google.com/macros/s/AKfycbwo-gzBtGM6-9cQeXOd4qsxFxAuprgpX0abHRwpGcemXQnAWLIsUax0hLs0ng6Mc6B7Dg/exec";
-
-// ================= HELPERS =================
-
-const getLocal = <T>(key: string): T[] => {
+// Helper to get/set
+const get = <T>(key: string, initial: T): T => {
+  const data = localStorage.getItem(key);
+  if (!data) {
+    localStorage.setItem(key, JSON.stringify(initial));
+    return initial;
+  }
   try {
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
+    return JSON.parse(data);
+  } catch (e) {
+    return initial;
   }
-}
-
-const safeArray = (data: any): any[] => {
-  if (Array.isArray(data)) return data;
-  if (typeof data === 'string') {
-    try {
-      const parsed = JSON.parse(data);
-      if (Array.isArray(parsed)) return parsed;
-    } catch { return []; }
-  }
-  return [];
 };
 
-const apiFetch = async <T>(sheetName: string): Promise<T[]> => {
-  const cacheKey = sheetName === 'Submissions' ? SUBMISSION_CACHE_KEY : `senja_${sheetName.toLowerCase()}_reset`;
-  
-  try {
-    const res = await fetch(`${API_URL}?action=getAll&_t=${Date.now()}`);
-    if (res.ok) {
-      const json = await res.json();
-      const data = json[sheetName.toLowerCase()];
-      if (Array.isArray(data)) {
-        localStorage.setItem(cacheKey, JSON.stringify(data));
-        return data;
-      }
+const set = <T>(key: string, data: T) => {
+  localStorage.setItem(key, JSON.stringify(data));
+};
+
+// --- SYNC ENGINE ---
+const getDbUrl = () => localStorage.getItem(KEYS.DB_URL) || SYSTEM_DB_URL;
+
+const syncToCloud = async () => {
+  const url = getDbUrl();
+  if (!url) return;
+
+  const payload = {
+    action: 'SAVE',
+    data: {
+      users: get(KEYS.USERS, INITIAL_USERS),
+      students: get(KEYS.STUDENTS, INITIAL_STUDENTS),
+      materials: get(KEYS.MATERIALS, INITIAL_MATERIALS),
+      submissions: get(KEYS.SUBMISSIONS, [])
+    },
+    settings: {
+        certBg: get(KEYS.SETTINGS, '')
     }
-  } catch (error) {
-    console.warn(`Offline mode: Loading ${sheetName} from cache.`);
-  }
-  return getLocal(cacheKey);
-};
-
-const apiSave = async <T>(sheetName: string, data: T[]) => {
-  const cacheKey = sheetName === 'Submissions' ? SUBMISSION_CACHE_KEY : `senja_${sheetName.toLowerCase()}_reset`;
-  localStorage.setItem(cacheKey, JSON.stringify(data));
-
-  try {
-    await fetch(API_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'save', sheet: sheetName, data: data })
-    });
-  } catch (error) {
-    console.error("Sync error:", error);
-  }
-};
-
-// ================= INITIALIZATION =================
-
-const defaultAdmin: User = {
-  id: 'admin-001', username: 'admin', password: 'admin', name: 'Administrator', role: Role.ADMIN, classGrade: ''
-};
-
-export const initStorage = async () => {
-  const users = getLocal<User>(KEYS.USERS);
-  if (users.length === 0) localStorage.setItem(KEYS.USERS, JSON.stringify([defaultAdmin]));
-  
-  // NUKE ALL OLD KEYS
-  Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('senja_submissions') && key !== SUBMISSION_CACHE_KEY) {
-          localStorage.removeItem(key);
-      }
-  });
-};
-
-initStorage();
-
-// ================= DATA SERVICES =================
-
-// Users, Students, Materials (Standard Logic)
-export const getUsers = async (): Promise<User[]> => {
-  const users = await apiFetch<User>('Users');
-  return users.some(u => u.username === 'admin') ? users : [defaultAdmin, ...users];
-};
-export const saveUser = async (user: User) => {
-  const list = getLocal<User>(KEYS.USERS);
-  if (!list.find(u => u.username === 'admin')) list.unshift(defaultAdmin);
-  const idx = list.findIndex(u => u.id === user.id);
-  if (idx >= 0) list[idx] = user; else list.push(user);
-  await apiSave('Users', list.map(u => ({ ...u, classGrade: u.classGrade || '' })));
-};
-export const deleteUser = async (id: string) => {
-  if (id === 'admin-001') return;
-  await apiSave('Users', getLocal<User>(KEYS.USERS).filter(u => u.id !== id).map(u => ({ ...u, classGrade: u.classGrade || '' })));
-};
-
-export const getStudents = async (): Promise<Student[]> => {
-  const data = await apiFetch<Student>('Students');
-  return data.map(s => ({ ...s, nisn: String(s.nisn), classGrade: String(s.classGrade) }));
-};
-export const saveStudent = async (student: Student) => {
-  await saveStudentsBulk([student]);
-};
-export const saveStudentsBulk = async (newStudents: Student[]) => {
-  const list = getLocal<Student>(KEYS.STUDENTS);
-  const map = new Map(list.map(s => [s.nisn, s]));
-  newStudents.forEach(s => map.set(s.nisn, s));
-  await apiSave('Students', Array.from(map.values()).map(s => ({ ...s, nisn: String(s.nisn), classGrade: String(s.classGrade) })));
-};
-export const deleteStudent = async (nisn: string) => {
-  await apiSave('Students', getLocal<Student>(KEYS.STUDENTS).filter(s => String(s.nisn) !== String(nisn)));
-};
-
-export const getMaterials = async (): Promise<Material[]> => {
-  const data = await apiFetch<Material>('Materials');
-  return data.map(m => ({
-    ...m, id: String(m.id), classGrade: String(m.classGrade),
-    questions: safeArray(m.questions), tasks: safeArray(m.tasks)
-  }));
-};
-export const saveMaterial = async (material: Material) => {
-  const list = getLocal<Material>(KEYS.MATERIALS);
-  const idx = list.findIndex(m => String(m.id) === String(material.id));
-  if (idx >= 0) list[idx] = material; else list.push(material);
-  await apiSave('Materials', list.map(m => ({ ...m, id: String(m.id), classGrade: String(m.classGrade) })));
-};
-export const deleteMaterial = async (id: string) => {
-  await apiSave('Materials', getLocal<Material>(KEYS.MATERIALS).filter(m => String(m.id) !== String(id)));
-};
-
-// --- SUBMISSIONS (CLEAN & STRICT LOGIC) ---
-export const getSubmissions = async (): Promise<Submission[]> => {
-  const data = await apiFetch<Submission>('Submissions');
-  return data.map(s => {
-    let status: 'APPROVED' | 'PENDING' = 'PENDING';
-    
-    // HANYA PERCAYA TEKS 'APPROVED' (Case Insensitive)
-    if (s.approvalStatus && String(s.approvalStatus).trim().toUpperCase() === 'APPROVED') {
-      status = 'APPROVED';
-    }
-
-    return {
-      ...s,
-      id: String(s.id),
-      materialId: String(s.materialId),
-      studentNisn: String(s.studentNisn),
-      answers: safeArray(s.answers),
-      taskText: s.taskText || '',
-      taskFileUrl: s.taskFileUrl || '',
-      teacherNotes: s.teacherNotes || '',
-      approvalStatus: status
-    };
-  });
-};
-
-export const saveSubmission = async (sub: Submission) => {
-  const list = getLocal<Submission>(SUBMISSION_CACHE_KEY);
-  const idx = list.findIndex(s => String(s.id) === String(sub.id));
-  
-  // PENTING: Jangan merge object lama. Gunakan data baru yang bersih.
-  const cleanSub: Submission = {
-    id: String(sub.id),
-    materialId: String(sub.materialId),
-    studentNisn: String(sub.studentNisn),
-    studentName: sub.studentName,
-    classGrade: String(sub.classGrade),
-    answers: sub.answers,
-    taskText: sub.taskText || '',
-    taskFileUrl: sub.taskFileUrl || '',
-    teacherNotes: sub.teacherNotes || '',
-    
-    // Status dikunci sesuai input function
-    approvalStatus: sub.approvalStatus === 'APPROVED' ? 'APPROVED' : 'PENDING',
-    
-    submittedAt: sub.submittedAt
   };
 
-  if (idx >= 0) list[idx] = cleanSub; else list.push(cleanSub);
-
-  // Normalisasi sebelum kirim ke API (Hanya kirim field yang diperlukan)
-  const normalized = list.map(s => ({
-    id: s.id,
-    materialId: s.materialId,
-    studentNisn: s.studentNisn,
-    studentName: s.studentName,
-    classGrade: s.classGrade,
-    answers: JSON.stringify(s.answers), // Stringify for sheet
-    taskText: s.taskText,
-    taskFileUrl: s.taskFileUrl,
-    teacherNotes: s.teacherNotes,
-    approvalStatus: s.approvalStatus, // Kirim String Tegas
-    submittedAt: s.submittedAt
-  }));
-
-  await apiSave('Submissions', normalized);
-};
-
-export const deleteSubmission = async (id: string) => {
-  const list = getLocal<Submission>(SUBMISSION_CACHE_KEY).filter(s => String(s.id) !== String(id));
-  
-  const normalized = list.map(s => ({
-    id: s.id,
-    materialId: s.materialId,
-    studentNisn: s.studentNisn,
-    studentName: s.studentName,
-    classGrade: s.classGrade,
-    answers: JSON.stringify(s.answers),
-    taskText: s.taskText,
-    taskFileUrl: s.taskFileUrl,
-    teacherNotes: s.teacherNotes,
-    approvalStatus: s.approvalStatus,
-    submittedAt: s.submittedAt
-  }));
-
-  await apiSave('Submissions', normalized);
-};
-
-// --- RESET DATA ---
-export const resetAllSubmissions = async () => {
-  localStorage.removeItem(SUBMISSION_CACHE_KEY);
-  await apiSave('Submissions', []);
-};
-
-// --- SETTINGS ---
-export const getSettings = async (): Promise<SettingItem[]> => apiFetch<SettingItem>('Settings');
-
-export const getCertBackground = async (): Promise<string | null> => {
-  const settings = await getSettings();
-  const chunks = settings.filter(s => s.key.startsWith('certBg_chunk')).sort((a,b) => {
-    return parseInt(a.key.replace('certBg_chunk','')) - parseInt(b.key.replace('certBg_chunk',''));
-  });
-  if (chunks.length > 0) return chunks.map(c => c.value).join('');
-  return settings.find(s => s.key === 'certBg')?.value || null;
-};
-
-export const saveCertBackground = async (dataUrl: string) => {
-  let settings = await apiFetch<SettingItem>('Settings');
-  settings = settings.filter(s => !s.key.startsWith('certBg'));
-  const CHUNK_SIZE = 45000;
-  const chunks = Math.ceil(dataUrl.length / CHUNK_SIZE);
-  for(let i=0; i<chunks; i++) {
-    settings.push({ key: `certBg_chunk${i}`, value: dataUrl.substr(i*CHUNK_SIZE, CHUNK_SIZE) });
+  // Size Check (approx 2MB limit for safety with gas)
+  const payloadStr = JSON.stringify(payload);
+  if (payloadStr.length > 2500000) {
+      console.warn("Payload too large for Google Script, reducing image quality/data not implemented but recommended.");
   }
-  await apiSave('Settings', settings);
+
+  try {
+    await fetch(url, {
+      method: 'POST',
+      body: payloadStr
+    });
+    console.log("Data synced to Spreadsheet");
+  } catch (e) {
+    console.error("Sync failed", e);
+  }
+};
+
+const syncFromCloud = async () => {
+  const url = getDbUrl();
+  if (!url) return false;
+
+  try {
+    const res = await fetch(`${url}?action=GET`);
+    const json = await res.json();
+    
+    // --- DATA SANITIZATION & MIGRATION ---
+    // Pastikan data memiliki field yang wajib, meskipun di spreadsheet kolomnya belum ada
+
+    // 1. Validate Users
+    let users = json.users || [];
+    if (!Array.isArray(users)) users = [];
+    
+    users = users.map((u: any) => ({
+        ...u,
+        // Jika Guru tidak punya kelas (undefined), set default ke '1'
+        // Jika Admin tidak punya kelas, set string kosong '' (agar kolom terbentuk)
+        classAssigned: u.classAssigned !== undefined && u.classAssigned !== null 
+            ? String(u.classAssigned) 
+            : (u.role === Role.TEACHER ? '1' : '')
+    }));
+
+    // Check if admin exists in cloud data
+    const hasAdmin = users.some((u: any) => u.username === 'admin');
+    if (!hasAdmin) {
+       console.warn("Admin missing in cloud data. Injecting default admin.");
+       users.push(INITIAL_USERS[0]);
+    }
+
+    // 2. Validate Students
+    let students = json.students || [];
+    if (Array.isArray(students)) {
+        students = students.map((s: any) => ({
+            ...s,
+            // Pastikan kelas ada
+            classGrade: s.classGrade ? String(s.classGrade) : '1'
+        }));
+    } else {
+        students = [];
+    }
+
+    // 3. Validate Materials
+    let materials = json.materials || [];
+    if (Array.isArray(materials)) {
+        materials = materials.map((m: any) => ({
+            ...m,
+            classGrade: m.classGrade ? String(m.classGrade) : '1'
+        }));
+    }
+
+    set(KEYS.USERS, users);
+    set(KEYS.STUDENTS, students);
+    if (materials.length > 0) set(KEYS.MATERIALS, materials);
+    if (json.submissions) set(KEYS.SUBMISSIONS, json.submissions);
+    if (json.settings?.certBg) set(KEYS.SETTINGS, json.settings.certBg);
+    
+    console.log("Data loaded and sanitized from Spreadsheet");
+    return true;
+  } catch (e) {
+    console.error("Load failed", e);
+    return false;
+  }
+};
+
+export const storageService = {
+  // Sync Methods
+  getDbUrl,
+  setDbUrl: (url: string) => {
+    localStorage.setItem(KEYS.DB_URL, url);
+    if (url) syncFromCloud();
+  },
+  syncToCloud,
+  syncFromCloud,
+  
+  // Hard Reset
+  resetApp: () => {
+    localStorage.clear();
+    window.location.reload();
+  },
+
+  // Users
+  getUsers: () => {
+    let users = get<User[]>(KEYS.USERS, INITIAL_USERS);
+    // ROBUST FAILSAFE: Ensure Admin always exists locally
+    if (!Array.isArray(users) || users.length === 0 || !users.find(u => u.username === 'admin')) {
+      // Re-inject defaults
+      users = [...INITIAL_USERS];
+      set(KEYS.USERS, users);
+    }
+    return users;
+  },
+  saveUser: (user: User) => {
+    let users = get<User[]>(KEYS.USERS, INITIAL_USERS);
+    const index = users.findIndex(u => u.id === user.id);
+    if (index >= 0) users[index] = user;
+    else users.push(user);
+    set(KEYS.USERS, users);
+    syncToCloud();
+  },
+  deleteUser: (id: string) => {
+    const users = get<User[]>(KEYS.USERS, INITIAL_USERS);
+    // Prevent deleting the last admin
+    const userToDelete = users.find(u => u.id === id);
+    if (userToDelete?.username === 'admin') return; 
+    
+    set(KEYS.USERS, users.filter(u => u.id !== id));
+    syncToCloud();
+  },
+
+  // Students
+  getStudents: () => get<Student[]>(KEYS.STUDENTS, INITIAL_STUDENTS),
+  saveStudent: (student: Student) => {
+    const list = get<Student[]>(KEYS.STUDENTS, INITIAL_STUDENTS);
+    const index = list.findIndex(s => s.nisn === student.nisn);
+    if (index >= 0) list[index] = student;
+    else list.push(student);
+    set(KEYS.STUDENTS, list);
+    syncToCloud();
+  },
+  deleteStudent: (nisn: string) => {
+    const list = get<Student[]>(KEYS.STUDENTS, INITIAL_STUDENTS);
+    set(KEYS.STUDENTS, list.filter(s => s.nisn !== nisn));
+    syncToCloud();
+  },
+  importStudents: (students: Student[]) => {
+    const current = get<Student[]>(KEYS.STUDENTS, INITIAL_STUDENTS);
+    const map = new Map(current.map(s => [s.nisn, s]));
+    students.forEach(s => map.set(s.nisn, s));
+    set(KEYS.STUDENTS, Array.from(map.values()));
+    syncToCloud();
+  },
+
+  // Materials
+  getMaterials: () => get<Material[]>(KEYS.MATERIALS, INITIAL_MATERIALS),
+  saveMaterial: (item: Material) => {
+    const list = get<Material[]>(KEYS.MATERIALS, INITIAL_MATERIALS);
+    const index = list.findIndex(m => m.id === item.id);
+    if (index >= 0) list[index] = item;
+    else list.push(item);
+    set(KEYS.MATERIALS, list);
+    syncToCloud();
+  },
+  deleteMaterial: (id: string) => {
+    const list = get<Material[]>(KEYS.MATERIALS, INITIAL_MATERIALS);
+    set(KEYS.MATERIALS, list.filter(m => m.id !== id));
+    syncToCloud();
+  },
+
+  // Submissions
+  getSubmissions: () => get<Submission[]>(KEYS.SUBMISSIONS, []),
+  saveSubmission: (sub: Submission) => {
+    const list = get<Submission[]>(KEYS.SUBMISSIONS, []);
+    const index = list.findIndex(s => s.id === sub.id);
+    if (index >= 0) list[index] = sub;
+    else list.push(sub);
+    set(KEYS.SUBMISSIONS, list);
+    syncToCloud();
+  },
+
+  // Settings
+  getCertBg: () => get<string>(KEYS.SETTINGS, ''),
+  setCertBg: (url: string) => {
+    set(KEYS.SETTINGS, url);
+    syncToCloud();
+  },
 };
