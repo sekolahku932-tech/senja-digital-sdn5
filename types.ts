@@ -1,65 +1,72 @@
-
 export enum Role {
   ADMIN = 'ADMIN',
-  TEACHER = 'TEACHER', // Wali Kelas
+  TEACHER = 'TEACHER',
   STUDENT = 'STUDENT'
 }
 
 export interface User {
   id: string;
   username: string;
-  password?: string; // Optional for student view
-  name: string;
+  password?: string;
+  fullName: string;
   role: Role;
-  classAssigned?: string; // For teachers (e.g., "1", "6")
+  assignedClass?: string; // For teachers (1-6)
 }
 
 export interface Student {
+  id: string;
   nisn: string;
   name: string;
   gender: 'L' | 'P';
-  classGrade: string; // 1-6
+  grade: string; // "1" to "6"
   parentId?: string;
 }
 
-export interface Question {
+export interface Parent {
+  id: string;
+  studentId: string;
+  name: string;
+  phone: string;
+}
+
+export interface ReflectionQuestion {
   id: string;
   text: string;
-  type: 'text';
 }
 
 export interface Material {
   id: string;
   title: string;
-  classGrade: string; // 1-6
-  type: 'PDF' | 'VIDEO' | 'ARTICLE';
-  contentUrl: string; // Link or base64 placeholder
-  coverImage?: string;
-  description?: string;
-  taskInstruction?: string; // New: Specific instruction for the upload task
-  reflectionQuestions: Question[];
+  grade: string;
+  content: string; // Description or text content
+  type: 'image' | 'video' | 'pdf' | 'text';
+  mediaUrl?: string; // Mock URL
+  linkUrl?: string; // YouTube or PDF link
+  questions: ReflectionQuestion[];
+  hasTask: boolean;
+  taskDescription?: string;
 }
 
 export interface Submission {
   id: string;
-  studentNisn: string;
-  studentName: string;
   materialId: string;
-  materialTitle: string;
-  answers: Record<string, string>; // questionId -> answer
-  taskFile?: string; // URL/Base64
+  studentId: string;
+  studentName: string;
+  reflectionAnswers: { questionId: string; answer: string }[];
+  
+  // Updated Task Fields
+  taskSubmissionType?: 'TEXT' | 'IMAGE';
+  taskSubmissionContent?: string; // Base64 string for image or plain text
+  taskFileUrl?: string; // Legacy support
+  
+  taskNotes?: string; // Student notes
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   teacherFeedback?: string;
+  gradedBy?: string;
   submittedAt: string;
 }
 
-export interface Parent {
-  id: string;
-  studentNisn: string;
-  name: string;
-  phone: string;
-}
-
 export interface AppState {
-  currentUser: User | null;
+  currentUser: User | Student | null;
+  currentRole: Role | null;
 }
