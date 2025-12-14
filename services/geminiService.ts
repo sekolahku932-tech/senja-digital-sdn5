@@ -41,6 +41,7 @@ export const generateReflectionQuestions = async (title: string, content: string
 
   } catch (error) {
     console.error("Gemini Error:", error);
+    // Fallback jika kuota habis atau error
     return [
       { id: 'err1', text: 'Sebutkan hal menarik dari bacaan ini!' },
       { id: 'err2', text: 'Apa pesan moral yang kamu dapatkan?' }
