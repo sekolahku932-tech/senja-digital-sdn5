@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
+import firebase from "firebase/compat/app";
 import { 
   getFirestore, collection, getDocs, addDoc, updateDoc, 
   deleteDoc, doc, query, where, getDoc, setDoc, writeBatch 
@@ -16,9 +16,10 @@ const firebaseConfig = {
   measurementId: "G-9JLCSWQP53"
 };
 
-// Initialize Firebase
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-export const db = getFirestore(app);
+// Initialize Firebase (Compat for App, Modular for Firestore)
+// Using compat/app avoids issues with importing named exports from firebase/app in some TS environments
+const app = firebase.apps.length > 0 ? firebase.app() : firebase.initializeApp(firebaseConfig);
+export const db = getFirestore(app as any);
 
 // Helper to map doc data with ID
 const mapDoc = (doc: any) => ({ id: doc.id, ...doc.data() });
@@ -66,9 +67,9 @@ export const seedDatabase = async () => {
 
     await batch.commit();
     return "Berhasil! User Admin (user: admin, pass: admin) telah dibuat.";
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
-    throw new Error("Gagal melakukan setup database.");
+    throw new Error("Gagal melakukan setup database: " + error.message);
   }
 };
 
